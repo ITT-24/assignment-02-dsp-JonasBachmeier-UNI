@@ -5,6 +5,8 @@ import pyglet as pg
 import mido
 from mido import MidiFile
 import time
+from scipy import signal
+
 
 np.set_printoptions(threshold=np.inf)
 
@@ -12,7 +14,7 @@ np.set_printoptions(threshold=np.inf)
 
 # Set up audio stream
 # reduce chunk size and sampling rate for lower latency
-CHUNK_SIZE = 1024  # Number of audio frames per buffer
+CHUNK_SIZE = 2048  # Number of audio frames per buffer
 FORMAT = pyaudio.paInt16  # Audio format
 CHANNELS = 1  # Mono audio
 RATE = 44100  # Audio sampling rate (Hz)
@@ -39,13 +41,24 @@ stream = p.open(format=FORMAT,
                 input_device_index=input_device)
 
 
-# Midi to sine setup
 # Function to convert MIDI note to frequency
 def midi_to_freq(note):
     return 2**((note - 69) / 12) * 440
 
-# Function to get dominant frequency
+
+SIGMA = 200
+
+# Function to get input frequency
 def get_input_freq(data):
+    kernel = signal.windows.gaussian(CHUNK_SIZE//10, SIGMA) # create a kernel
+    kernel /= np.sum(kernel) # normalize the kernel so it does not affect the signal's amplitude
+    
+    data = np.convolve(data, kernel, 'same')
+
+    # Apply a Hamming window
+    window = np.hamming(CHUNK_SIZE)
+    data = data * window
+
     # Perform FFT
     fft_vals = np.fft.rfft(data)
 
@@ -79,9 +92,11 @@ class Player:
     def move(self, y):
         y = abs(y)
         if y < 10:
-            self.sprite.y -= 20
+            self.sprite.y = 0
+        elif y > 1000:
+            self.sprite.y = 1000
         else:
-            self.sprite.y += y / 10
+            self.sprite.y = y
 
         if self.sprite.y < 0:
             self.sprite.y = 0
@@ -102,14 +117,14 @@ def on_draw():
     player.sprite.draw()
     data = stream.read(CHUNK_SIZE)
     data = np.frombuffer(data, dtype=np.int16)
-    user_freq = get_input_freq(data)
+    user_freq = abs(get_input_freq(data))
     print("User's frequency:", user_freq)
-    player.move(user_freq/100)
+    player.move(user_freq)
     if current_msg.time < time.time() - start_time:
-        print(current_msg)
+        #print(current_msg)
         if current_msg.type == 'note_on':
             freq = midi_to_freq(current_msg.note)
-            print("MIDI FREQ: ", freq)
+            #print("MIDI FREQ: ", freq)
         current_msg = next(music)
 
 pg.app.run()
