@@ -17,6 +17,7 @@ FORMAT = pyaudio.paInt16  # Audio format
 CHANNELS = 1  # Mono audio
 RATE = 44100  # Audio sampling rate (Hz)
 SIGMA = 200 # Sigma for gaussian kernel
+THRESHOLD = 100 # Threshold for peak detection
 p = pyaudio.PyAudio()
 
 # print info about audio devices
@@ -75,15 +76,10 @@ class Player:
         y = abs(y)
         if y < 0:
             self.sprite.y = 0
-        elif y > 1000:
-            self.sprite.y = 1000
+        elif y > WINDOW_HEIGHT:
+            self.sprite.y = WINDOW_HEIGHT
         else:
             self.sprite.y = y
-
-        if self.sprite.y < 0:
-            self.sprite.y = 0
-        if self.sprite.y > WINDOW_HEIGHT:
-            self.sprite.y = WINDOW_HEIGHT
 
     def compare_freq(self, freq):
         if self.sprite.y <= freq*1.2 and self.sprite.y >= freq *0.8:
@@ -95,30 +91,31 @@ class Player:
     # The frequency is not stable and jumps around a lot
     # But when you f.e. talk into the microphone, the frequency is stable and correct
     def get_input_freq(self,data):
-
-        # Apply a Gaussian kernel to the data 
-        kernel = signal.windows.gaussian(CHUNK_SIZE//10, SIGMA) # create a kernel
-        kernel /= np.sum(kernel) # normalize the kernel so it does not affect the signal's amplitude
         
-        data = np.convolve(data, kernel, 'same')
+        # Ignore data if it is too quiet to reduce background noise
+        if np.max(data) > THRESHOLD:
+            # Apply a Gaussian kernel to the data 
+            kernel = signal.windows.gaussian(CHUNK_SIZE//10, SIGMA) # create a kernel
+            kernel /= np.sum(kernel) # normalize the kernel so it does not affect the signal's amplitude
+            
+            data = np.convolve(data, kernel, 'same')
 
-        # Apply a Hamming window
-        window = np.hamming(CHUNK_SIZE)
-        data = data * window
+            # Apply a Hamming window
+            window = np.hamming(CHUNK_SIZE)
+            data = data * window
 
-        # Perform rFFT (r gets only the positive frequencies)
-        fft_vals = np.fft.rfft(data)
+            # Perform rFFT (r gets only the positive frequencies)
+            fft_vals = np.fft.rfft(data)
 
-        # Get absolute value to determine magnitude
-        fft_abs = np.abs(fft_vals)
+            # Get absolute value to determine magnitude
+            fft_abs = np.abs(fft_vals)
 
-        # Get frequency list
-        freqs = np.fft.rfftfreq(CHUNK_SIZE, 1.0/RATE)
+            # Get frequency list
+            freqs = np.fft.rfftfreq(CHUNK_SIZE, 1.0/RATE)
 
-        # Get peak frequency
-        peak_freq = freqs[np.argmax(fft_abs)]
-        self.freq = peak_freq
-        return peak_freq
+            # Get peak frequency
+            peak_freq = freqs[np.argmax(fft_abs)]
+            self.freq = peak_freq
 
 class SoundBlock:
     
@@ -127,7 +124,6 @@ class SoundBlock:
             self.sprite.scale = SCALE
     
         def move(self, y):
-            print("Moving soundblock")
             self.sprite.y = y
 
        
@@ -164,7 +160,7 @@ def on_draw():
     app_window.clear()
     background.draw()
     if game_over:
-        pg.text.Label("FIN. Your Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT/2).draw()
+        pg.text.Label("DONE. Your Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT/2).draw()
         pg.text.Label("Press SPACE to restart", x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT/2 - 50).draw()
         return
     else:
@@ -187,6 +183,6 @@ def on_draw():
             except:
                 game_over = True
         
-        pg.text.Label("Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT - 10).draw()
+        pg.text.Label("Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT - 30).draw()
 
 pg.app.run()

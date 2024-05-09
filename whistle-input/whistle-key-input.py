@@ -16,6 +16,7 @@ CHANNELS = 1  # Mono audio
 RATE = 44100  # Audio sampling rate (Hz)
 THRESHOLD = 100 # Threshold for peak detection
 WHISTLE_THRESHOLD = 1500
+
 BLOCK_AMOUNT = 5
 
 p = pyaudio.PyAudio()
@@ -39,10 +40,6 @@ stream = p.open(format=FORMAT,
                 input=True,
                 frames_per_buffer=CHUNK_SIZE,
                 input_device_index=input_device)
-
-WINDOW_HEIGHT=1000
-WINDOW_WIDTH=1000
-app_window = pg.window.Window(WINDOW_HEIGHT,WINDOW_WIDTH)
 
 freq_history = []
 
@@ -71,35 +68,6 @@ def get_frequency(data):
 
     return peak_freq
 
-# Code copied from last assignment
-class Blocks:
-    blocks = []
-    selected_block = 0
-
-    def __init__(self,width, height, x, y, color=(255, 0, 0)):
-        self.rect = pg.shapes.Rectangle(width=width, height=height, x=x, y=y, color=color)
-    
-    def draw_all():
-        for block in Blocks.blocks:
-            block.rect.draw()
-
-    def change_selection(dir="up"):
-        # set currently selected block to red
-        Blocks.blocks[Blocks.selected_block].rect.color = (255, 0, 0)
-        if dir == "up":
-            Blocks.selected_block += 1
-        elif dir == "down":
-            Blocks.selected_block -= 1
-
-        # if selection goes out of bounds, loop around
-        if Blocks.selected_block < 0:
-            Blocks.selected_block = len(Blocks.blocks) - 1
-        elif Blocks.selected_block >= len(Blocks.blocks):
-            Blocks.selected_block = 0
-        
-        # set new selected block to green
-        Blocks.blocks[Blocks.selected_block].rect.color = (0, 255, 0)
-
 
 def check_for_whistle(freq_history):
     # turn freq_history into numpy array to process data
@@ -114,27 +82,18 @@ def check_for_whistle(freq_history):
         freq_history1 = freq_history[:len(freq_history)//2]
         freq_history2 = freq_history[len(freq_history)//2:]
         # if first half mean is lower than second half mean the whistle is going up
+        # then press the right arrow key
+        # else press the left arrow key
         if np.mean(freq_history1) < np.mean(freq_history2):
-            Blocks.change_selection("up")
+            pynput.keyboard.Controller().press(pynput.keyboard.Key.right)
         else:
-            Blocks.change_selection("down")
+            pynput.keyboard.Controller().press(pynput.keyboard.Key.left)
 
 # timer setup
 whistle_started = False
 whistle_started_time = time.time()
 
-# create blocks
-# first block is created with different color to signal selection
-Blocks.blocks.append(Blocks(50, 50, 100, WINDOW_HEIGHT//2, (0, 255, 0)))
-for i in range(BLOCK_AMOUNT):
-    print(i)
-    Blocks.blocks.append(Blocks(50, 50, 200 + i * 100, WINDOW_HEIGHT//2))
-
-@app_window.event
-def on_draw():
-    global whistle_started
-    global whistle_started_time
-    global freq_history
+while True:
 
     # Read audio data from stream
     data = stream.read(CHUNK_SIZE)
@@ -161,10 +120,5 @@ def on_draw():
         
         whistle_started = False
         freq_history = []
-
-    Blocks.draw_all()
-
-    
-pg.app.run()
 
 
