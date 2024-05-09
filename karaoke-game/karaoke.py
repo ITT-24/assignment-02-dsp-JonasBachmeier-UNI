@@ -68,8 +68,6 @@ class Player:
         self.score = 0
         self.freq = 0
         self.rect = pg.shapes.Rectangle(height=50, width=50, x=x, y=y, color=(255, 255, 255))
-        #self.sprite = pg.sprite.Sprite(player_image, x=x, y=y)
-        #self.sprite.scale = SCALE
 
     def move(self, y):
         y = abs(y)
