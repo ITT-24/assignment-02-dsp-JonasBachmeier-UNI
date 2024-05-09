@@ -46,27 +46,25 @@ freq_history = []
 # Code copied from karaoke.py / Übung 2
 def get_frequency(data):
 
-    if np.max(data) < THRESHOLD:
-            return 0
+    if np.max(data) > THRESHOLD:
+        kernel = signal.windows.gaussian(CHUNK_SIZE//10, 200) # create a kernel
+        kernel /= np.sum(kernel) # normalize the kernel so it does not affect the signal's amplitude
+        
+        data = np.convolve(data, kernel, 'same')
 
-    kernel = signal.windows.gaussian(CHUNK_SIZE//10, 200) # create a kernel
-    kernel /= np.sum(kernel) # normalize the kernel so it does not affect the signal's amplitude
-    
-    data = np.convolve(data, kernel, 'same')
+        # Apply a Hamming window
+        window = np.hamming(CHUNK_SIZE)
+        data = data * window
 
-    # Apply a Hamming window
-    window = np.hamming(CHUNK_SIZE)
-    data = data * window
+        # Perform FFT
+        fft = np.fft.rfft(data)
+        freqs = np.fft.rfftfreq(len(fft), 1/RATE)
+        fft = np.abs(fft)
 
-    # Perform FFT
-    fft = np.fft.rfft(data)
-    freqs = np.fft.rfftfreq(len(fft), 1/RATE)
-    fft = np.abs(fft)
+        # Find the peak frequency
+        peak_freq = freqs[np.argmax(fft)]
 
-    # Find the peak frequency
-    peak_freq = freqs[np.argmax(fft)]
-
-    return peak_freq
+        return peak_freq
 
 
 def check_for_whistle(freq_history):
@@ -106,7 +104,6 @@ while True:
 
     # if the detected frequency is above the threshold and a whistle detection has not started yet, start the whistle timer
     if freq > WHISTLE_THRESHOLD and not whistle_started:
-        print("whistle started")
         whistle_started = True
         whistle_started_time = time.time()
 

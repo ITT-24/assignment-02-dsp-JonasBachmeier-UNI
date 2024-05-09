@@ -50,7 +50,7 @@ def midi_to_freq(note):
 # Game setup
 # Load resources
 
-SCALE = 0.3
+SCALE = 0.1
 WINDOW_HEIGHT=1000
 WINDOW_WIDTH=1000
 app_window = pg.window.Window(WINDOW_HEIGHT,WINDOW_WIDTH)
@@ -62,34 +62,34 @@ background = pg.sprite.Sprite(background_image, x=0, y=0)
 background.height = WINDOW_HEIGHT
 background.width = WINDOW_WIDTH
 
-block_image = pg.resource.image('soundblock.png')
-
 class Player:
 
     def __init__(self, x, y):
         self.score = 0
         self.freq = 0
-        self.sprite = pg.sprite.Sprite(player_image, x=x, y=y)
-        self.sprite.scale = SCALE
+        self.rect = pg.shapes.Rectangle(height=50, width=50, x=x, y=y, color=(255, 255, 255))
+        #self.sprite = pg.sprite.Sprite(player_image, x=x, y=y)
+        #self.sprite.scale = SCALE
 
     def move(self, y):
         y = abs(y)
         if y < 0:
-            self.sprite.y = 0
+            self.rect.y = 0
         elif y > WINDOW_HEIGHT:
-            self.sprite.y = WINDOW_HEIGHT
+            self.rect.y = WINDOW_HEIGHT
         else:
-            self.sprite.y = y
+            self.rect.y = y
 
     def compare_freq(self, freq):
-        if self.sprite.y <= freq*1.2 and self.sprite.y >= freq *0.8:
+        # Checks if a soundblock x coordinate is withing the player
+        # Also checks if the players y coordinate is within the soundblock with a small margin
+        if any((block.rect.x < self.rect.x + self.rect.width and block.rect.x + block.rect.width >= self.rect.x + self.rect.width) and (self.rect.y <= block.rect.y + block.rect.height*1.3 and self.rect.y >= block.rect.y - block.rect.height*0.3)  for block in SoundBlock.soundblocks):
             self.score += 1
-            print("Freq matched")
 
     # Function to get input frequency
     # The Returned frequency still has some issues when no clear input is given
     # The frequency is not stable and jumps around a lot
-    # But when you f.e. talk into the microphone, the frequency is stable and correct
+    # But when you f.e. talk into the microphone, the frequency is stable and (mostly) correct
     def get_input_freq(self,data):
         
         # Ignore data if it is too quiet to reduce background noise
@@ -118,22 +118,28 @@ class Player:
             self.freq = peak_freq
 
 class SoundBlock:
+        soundblocks = []
+
+
+        def __init__(self, width, height, x, y):
+            self.rect = pg.shapes.Rectangle(height=height, width=width, x=x, y=y, color=(100, 100, 0, 100))
     
-        def __init__(self, x, y):
-            self.sprite = pg.sprite.Sprite(block_image, x=x, y=y)
-            self.sprite.scale = SCALE
-    
-        def move(self, y):
-            self.sprite.y = y
+        def move(x):
+            for block in SoundBlock.soundblocks:
+                block.rect.x -= x
+
+        def draw_all():
+            for block in SoundBlock.soundblocks:
+                block.rect.draw()
 
        
 # Global variables
 player = Player(100, 100)
-soundblock = SoundBlock(600, 100)
 music = MidiFile("freude.mid").play()
 current_msg = next(music)
 prev_note_time = time.time()
 game_over = False
+game_started = False
 
 @app_window.event
 def on_key_press(symbol, modifiers):
@@ -141,48 +147,58 @@ def on_key_press(symbol, modifiers):
     global current_msg
     global prev_note_time
     global music
+    global game_started
     if symbol == pg.window.key.SPACE:
+        if not game_started:
+            game_started = True
         if game_over:
             game_over = False
             player.score = 0
             music = MidiFile("freude.mid").play()
             current_msg = next(music)
             prev_note_time = time.time()
+            SoundBlock.soundblocks = []
 
 @app_window.event
 def on_draw():
     global current_msg
     global player
-    global soundblock
     global prev_note_time
     global game_over
     global music
+    global game_started
     app_window.clear()
     background.draw()
+    if not game_started:
+        pg.text.Label("Press SPACE to start", x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT/2).draw()
+        return
     if game_over:
         pg.text.Label("DONE. Your Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT/2).draw()
         pg.text.Label("Press SPACE to restart", x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT/2 - 50).draw()
         return
     else:
-        player.sprite.draw()
-        soundblock.sprite.draw()
+        player.rect.draw()
+        SoundBlock.draw_all()
         data = stream.read(CHUNK_SIZE)
         data = np.frombuffer(data, dtype=np.int16)
 
         # Handle player movement and SoundBlock movement
         player.get_input_freq(data)
         player.move(player.freq)
+        # Only try to spawn soundblock if the current note is far enough away from last note
         if current_msg.time < time.time() - prev_note_time:
             prev_note_time = time.time()
             if current_msg.type == 'note_on':
                 freq = midi_to_freq(current_msg.note)
-                soundblock.move(freq)
+                SoundBlock.soundblocks.append(SoundBlock(current_msg.time*200, 50, WINDOW_WIDTH, freq))
                 player.compare_freq(freq)
             try:
                 current_msg = next(music)
             except:
-                game_over = True
-        
+                if(player.rect.x > SoundBlock.soundblocks[-1].rect.x + SoundBlock.soundblocks[-1].rect.width):
+                    game_over = True
+            SoundBlock.move(current_msg.time * 100)
+
         pg.text.Label("Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT - 30).draw()
 
 pg.app.run()
