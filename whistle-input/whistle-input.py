@@ -103,7 +103,10 @@ def check_for_whistle(freq_history):
     # turn freq_history into numpy array to process data
     freq_history = np.array(freq_history)
     # remove all frequencies below the threshold to get rid of outliers
-    freq_history = freq_history[freq_history > WHISTLE_THRESHOLD]
+    try:
+        freq_history = freq_history[freq_history > WHISTLE_THRESHOLD]
+    except TypeError:
+        return
 
     # if there are not enough samples, do nothing
     if len(freq_history) > 5:
@@ -143,9 +146,10 @@ def on_draw():
     freq = get_frequency(data)
 
     # if the detected frequency is above the threshold and a whistle detection has not started yet, start the whistle timer
-    if freq > WHISTLE_THRESHOLD and not whistle_started:
-        whistle_started = True
-        whistle_started_time = time.time()
+    if freq is not None:
+        if freq > WHISTLE_THRESHOLD and not whistle_started:
+            whistle_started = True
+            whistle_started_time = time.time()
 
     # while the whistle timer is running, add the detected frequencies to the freq_history
     if whistle_started and time.time() - whistle_started_time <= 1:

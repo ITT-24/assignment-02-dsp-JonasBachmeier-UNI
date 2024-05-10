@@ -13,11 +13,12 @@ from scipy import signal
 # Set up audio stream
 # reduce chunk size and sampling rate for lower latency
 CHUNK_SIZE = 2048  # Number of audio frames per buffer
+#CHUNK_SIZE = 2048  # Number of audio frames per buffer
 FORMAT = pyaudio.paInt16  # Audio format
 CHANNELS = 1  # Mono audio
 RATE = 44100  # Audio sampling rate (Hz)
 SIGMA = 200 # Sigma for gaussian kernel
-THRESHOLD = 100 # Threshold for peak detection
+THRESHOLD = 0 # Threshold for peak detection
 p = pyaudio.PyAudio()
 
 # print info about audio devices
@@ -44,7 +45,9 @@ stream = p.open(format=FORMAT,
 
 # Function to convert MIDI note to frequency
 def midi_to_freq(note):
-    return 2**((note - 69) / 12) * 440
+    freq = 2**((note - 69) / 12) * 440
+    #print('target:', freq)
+    return freq
 
 
 # Game setup
@@ -59,8 +62,8 @@ player_image = pg.resource.image('player.png')
 
 background_image = pg.resource.image('background.jpg')
 background = pg.sprite.Sprite(background_image, x=0, y=0)
-background.height = WINDOW_HEIGHT
-background.width = WINDOW_WIDTH
+#background.height = WINDOW_HEIGHT
+#background.width = WINDOW_WIDTH
 
 class Player:
 
@@ -90,13 +93,14 @@ class Player:
     # But when you f.e. talk into the microphone, the frequency is stable and (mostly) correct
     def get_input_freq(self,data):
         
+        #print('too quiet')
         # Ignore data if it is too quiet to reduce background noise
         if np.max(data) > THRESHOLD:
             # Apply a Gaussian kernel to the data 
             kernel = signal.windows.gaussian(CHUNK_SIZE//10, SIGMA) # create a kernel
             kernel /= np.sum(kernel) # normalize the kernel so it does not affect the signal's amplitude
             
-            data = np.convolve(data, kernel, 'same')
+            #data = np.convolve(data, kernel, 'same')
 
             # Apply a Hamming window
             window = np.hamming(CHUNK_SIZE)
@@ -114,6 +118,7 @@ class Player:
             # Get peak frequency
             peak_freq = freqs[np.argmax(fft_abs)]
             self.freq = peak_freq
+            print(self.freq)
 
 class SoundBlock:
         soundblocks = []
@@ -152,7 +157,7 @@ def on_key_press(symbol, modifiers):
         if game_over:
             game_over = False
             player.score = 0
-            music = MidiFile("freude.mid").play()
+            music = MidiFile("freude.mid")#.play()
             current_msg = next(music)
             prev_note_time = time.time()
             SoundBlock.soundblocks = []
@@ -177,6 +182,7 @@ def on_draw():
     else:
         player.rect.draw()
         SoundBlock.draw_all()
+        print('----------------------')
         data = stream.read(CHUNK_SIZE)
         data = np.frombuffer(data, dtype=np.int16)
 
@@ -187,6 +193,7 @@ def on_draw():
         if current_msg.time < time.time() - prev_note_time:
             prev_note_time = time.time()
             if current_msg.type == 'note_on':
+                #print(current_msg)
                 freq = midi_to_freq(current_msg.note)
                 SoundBlock.soundblocks.append(SoundBlock(current_msg.time*200, 50, WINDOW_WIDTH, freq))
                 player.compare_freq(freq)
@@ -195,6 +202,7 @@ def on_draw():
             except:
                 if(player.rect.x > SoundBlock.soundblocks[-1].rect.x + SoundBlock.soundblocks[-1].rect.width):
                     game_over = True
+            # AS: why 100 as magic number? shouldn't this be correlated to delta time since last update?
             SoundBlock.move(current_msg.time * 100)
 
         pg.text.Label("Score: " + str(player.score), x=WINDOW_WIDTH/2, y=WINDOW_HEIGHT - 30).draw()

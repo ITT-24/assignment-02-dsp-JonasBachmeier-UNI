@@ -71,7 +71,12 @@ def check_for_whistle(freq_history):
     # turn freq_history into numpy array to process data
     freq_history = np.array(freq_history)
     # remove all frequencies below the threshold to get rid of outliers
-    freq_history = freq_history[freq_history > WHISTLE_THRESHOLD]
+
+    try:
+        freq_history = freq_history[freq_history > WHISTLE_THRESHOLD]
+    except TypeError:
+        print('error')
+        return
 
     # if there are not enough samples, do nothing
     if len(freq_history) > 5:
@@ -82,9 +87,13 @@ def check_for_whistle(freq_history):
         # if first half mean is lower than second half mean the whistle is going up
         # then press the right arrow key
         # else press the left arrow key
+
+        # AS: why doesn't it stop?
         if np.mean(freq_history1) < np.mean(freq_history2):
+            print('right')
             pynput.keyboard.Controller().press(pynput.keyboard.Key.right)
         else:
+            print('left')
             pynput.keyboard.Controller().press(pynput.keyboard.Key.left)
 
 # timer setup
@@ -103,9 +112,10 @@ while True:
     freq = get_frequency(data)
 
     # if the detected frequency is above the threshold and a whistle detection has not started yet, start the whistle timer
-    if freq > WHISTLE_THRESHOLD and not whistle_started:
-        whistle_started = True
-        whistle_started_time = time.time()
+    if freq is not None:
+        if freq > WHISTLE_THRESHOLD and not whistle_started:
+            whistle_started = True
+            whistle_started_time = time.time()
 
     # while the whistle timer is running, add the detected frequencies to the freq_history
     if whistle_started and time.time() - whistle_started_time <= 1:
